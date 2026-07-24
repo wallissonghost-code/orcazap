@@ -1,9 +1,9 @@
-const CACHE = 'orcazap-v10';
+const CACHE = 'orcazap-v11';
 const ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
-  '/whatsapp.css?v=1',
+  '/whatsapp.css?v=2',
   '/app-core.js',
   '/app-views.js',
   '/app-events.js',
