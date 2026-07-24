@@ -1,4 +1,4 @@
-const CACHE = 'orcazap-v3';
+const CACHE = 'orcazap-v4';
 const ASSETS = [
   '/',
   '/index.html',
