@@ -1,8 +1,9 @@
-const CACHE = 'orcazap-v9';
+const CACHE = 'orcazap-v10';
 const ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
+  '/whatsapp.css?v=1',
   '/app-core.js',
   '/app-views.js',
   '/app-events.js',
@@ -10,6 +11,7 @@ const ASSETS = [
   '/app-pdf.js',
   '/pdf-fix.js?v=7',
   '/pdf-luxury.js?v=9',
+  '/app-whatsapp.js?v=1',
   '/icon.svg',
   '/manifest.webmanifest'
 ];
@@ -22,6 +24,7 @@ self.addEventListener('activate', event => {
 });
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return;
   event.respondWith(fetch(event.request).then(response => {
     const clone = response.clone();
     caches.open(CACHE).then(cache => cache.put(event.request, clone));
