@@ -16,6 +16,23 @@
     border: [0.880, 0.820, 0.690]
   };
 
+  const WIDTHS = {
+    helvetica: {
+      default: 556,
+      ' ': 278, '.': 278, ',': 278, ':': 278, ';': 278, '-': 333, '/': 278,
+      '0': 556, '1': 556, '2': 556, '3': 556, '4': 556, '5': 556, '6': 556, '7': 556, '8': 556, '9': 556,
+      A: 667, B: 667, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 500, K: 667, L: 556, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611,
+      a: 556, b: 556, c: 500, d: 556, e: 556, f: 278, g: 556, h: 556, i: 222, j: 222, k: 500, l: 222, m: 833, n: 556, o: 556, p: 556, q: 556, r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500
+    },
+    times: {
+      default: 500,
+      ' ': 250, '.': 250, ',': 250, ':': 278, ';': 278, '-': 333, '/': 278,
+      '0': 500, '1': 500, '2': 500, '3': 500, '4': 500, '5': 500, '6': 500, '7': 500, '8': 500, '9': 500,
+      A: 722, B: 667, C: 667, D: 722, E: 611, F: 556, G: 722, H: 722, I: 333, J: 389, K: 722, L: 611, M: 889, N: 722, O: 722, P: 556, Q: 722, R: 667, S: 556, T: 611, U: 722, V: 722, W: 944, X: 722, Y: 722, Z: 611,
+      a: 444, b: 500, c: 444, d: 500, e: 444, f: 333, g: 500, h: 500, i: 278, j: 278, k: 500, l: 278, m: 778, n: 500, o: 500, p: 500, q: 500, r: 333, s: 389, t: 278, u: 500, v: 500, w: 722, x: 500, y: 500, z: 444
+    }
+  };
+
   function normalizeText(value) {
     return String(value ?? '')
       .replace(/\r\n?/g, '\n')
@@ -59,20 +76,14 @@
     const lines = [];
     paragraphs.forEach((paragraph, paragraphIndex) => {
       const words = paragraph.trim().split(/\s+/).filter(Boolean);
-      if (!words.length) {
-        lines.push('');
-      } else {
-        let line = '';
-        for (const word of words) {
-          if (!line) line = word;
-          else if ((line + ' ' + word).length <= maxChars) line += ' ' + word;
-          else {
-            lines.push(line);
-            line = word;
-          }
-        }
-        if (line) lines.push(line);
+      let line = '';
+      if (!words.length) lines.push('');
+      for (const word of words) {
+        if (!line) line = word;
+        else if (`${line} ${word}`.length <= maxChars) line += ` ${word}`;
+        else { lines.push(line); line = word; }
       }
+      if (line) lines.push(line);
       if (paragraphIndex < paragraphs.length - 1) lines.push('');
     });
     return lines;
@@ -91,7 +102,6 @@
     const parts = normalizeText(value).trim().split(/\s+/).filter(Boolean);
     if (!parts.length) return 'OZ';
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    if (parts[0].length <= 3) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
@@ -109,17 +119,10 @@
     let y = PAGE_HEIGHT - 36;
     let pageNumber = 1;
 
-    function setFill(rgb) {
-      commands.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} rg`);
-    }
-
-    function setStroke(rgb) {
-      commands.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} RG`);
-    }
-
-    function setLineWidth(width) {
-      commands.push(`${width.toFixed(2)} w`);
-    }
+    const setFill = rgb => commands.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} rg`);
+    const setStroke = rgb => commands.push(`${rgb[0].toFixed(3)} ${rgb[1].toFixed(3)} ${rgb[2].toFixed(3)} RG`);
+    const setLineWidth = width => commands.push(`${width.toFixed(2)} w`);
+    const line = (x1, y1, x2, y2) => commands.push(`${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`);
 
     function rect(x, top, width, height, fill = true, stroke = false) {
       commands.push(`${x.toFixed(2)} ${(top - height).toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)} re ${fill && stroke ? 'B' : fill ? 'f' : 'S'}`);
@@ -151,20 +154,21 @@
       commands.push(fill && stroke ? 'B' : fill ? 'f' : 'S');
     }
 
-    function line(x1, y1, x2, y2) {
-      commands.push(`${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`);
-    }
-
-    function estimatedWidth(textValue, size, font = 'F1') {
-      const factor = font === 'F3' || font === 'F4' || font === 'F5' ? 0.49 : 0.50;
-      return normalizeText(textValue).length * size * factor;
+    function measureText(value, size, font = 'F1') {
+      const family = font === 'F3' || font === 'F4' || font === 'F5' ? 'times' : 'helvetica';
+      const table = WIDTHS[family];
+      const plain = normalizeText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      let units = 0;
+      for (const char of plain) units += table[char] ?? table.default;
+      return units * size / 1000;
     }
 
     function text(x, baseline, value, size = 10, font = 'F1', align = 'left', textColor = COLORS.ink) {
       const clean = normalizeText(value);
       let drawX = x;
-      if (align === 'right') drawX -= estimatedWidth(clean, size, font);
-      if (align === 'center') drawX -= estimatedWidth(clean, size, font) / 2;
+      const width = measureText(clean, size, font);
+      if (align === 'right') drawX -= width;
+      if (align === 'center') drawX -= width / 2;
       commands.push('BT');
       commands.push(`/${font} ${size.toFixed(2)} Tf`);
       commands.push(`${textColor[0].toFixed(3)} ${textColor[1].toFixed(3)} ${textColor[2].toFixed(3)} rg`);
@@ -180,8 +184,7 @@
       setFill(COLORS.navy);
       rect(0, 13, PAGE_WIDTH, 13, true);
       text(LEFT, FOOTER_Y + 2, settings.footer || 'Obrigado pela preferência!', 8.2, 'F5', 'left', COLORS.ink);
-      const pixText = settings.pixKey ? `Pix: ${settings.pixKey}` : '';
-      if (pixText) text(LEFT, FOOTER_Y - 11, pixText, 7.3, 'F1', 'left', COLORS.muted);
+      if (settings.pixKey) text(LEFT, FOOTER_Y - 11, `Pix: ${settings.pixKey}`, 7.3, 'F1', 'left', COLORS.muted);
       text(RIGHT, FOOTER_Y + 2, `Gerado pelo OrçaZap em ${new Date().toLocaleDateString('pt-BR')}`, 7.3, 'F1', 'right', COLORS.muted);
       text(RIGHT, FOOTER_Y - 11, `Página ${pageNumber}`, 7.3, 'F1', 'right', COLORS.muted);
     }
@@ -203,14 +206,6 @@
       }
     }
 
-    function drawMonogram(cx, cy, size, value) {
-      setFill(COLORS.navy2);
-      setStroke(COLORS.gold);
-      setLineWidth(1.2);
-      circle(cx, cy, size, true, true);
-      text(cx, cy - 5, value, 14, 'F4', 'center', COLORS.gold);
-    }
-
     function firstPageHeader() {
       setFill(COLORS.navy);
       rect(0, PAGE_HEIGHT, PAGE_WIDTH, 150, true);
@@ -220,8 +215,7 @@
       line(0, PAGE_HEIGHT - 150, PAGE_WIDTH, PAGE_HEIGHT - 150);
 
       const brand = settings.businessName || 'Minha Empresa';
-      const mark = initials(brand);
-      text(LEFT, PAGE_HEIGHT - 65, mark, 33, 'F4', 'left', COLORS.gold);
+      text(LEFT, PAGE_HEIGHT - 65, initials(brand), 33, 'F4', 'left', COLORS.gold);
       text(LEFT + 72, PAGE_HEIGHT - 59, brand.toUpperCase(), 17, 'F4', 'left', COLORS.paper);
       const companyLine = [settings.phone, settings.email].filter(Boolean).join('  |  ');
       text(LEFT + 72, PAGE_HEIGHT - 81, companyLine || 'Orçamento profissional', 8.4, 'F1', 'left', COLORS.goldLight);
@@ -252,29 +246,27 @@
       roundedRect(LEFT, y, CONTENT_WIDTH, 88, 8, true, true);
       const cardTop = y;
       const cardBottom = y - 88;
+      const divider1 = LEFT + 294;
+      const divider2 = LEFT + 407;
       const clientX = LEFT + 18;
-      const iconY = cardBottom + 44;
-      drawMonogram(clientX + 18, iconY, 17, 'C');
-      text(clientX + 48, cardTop - 23, 'CLIENTE', 7.5, 'F2', 'left', COLORS.gold);
-      text(clientX + 48, cardTop - 43, client.name || quote.clientName || 'Cliente', 11.3, 'F2', 'left', COLORS.ink);
-      const clientContact = [client.phone, client.email].filter(Boolean).join('  |  ');
-      if (clientContact) text(clientX + 48, cardTop - 61, clientContact, 7.8, 'F1', 'left', COLORS.muted);
-      if (client.document) text(clientX + 48, cardTop - 75, client.document, 7.2, 'F1', 'left', COLORS.muted);
 
-      const divider1 = LEFT + 290;
-      const divider2 = LEFT + 402;
       setStroke(COLORS.goldLight);
       setLineWidth(0.6);
       line(divider1, cardTop - 15, divider1, cardBottom + 15);
       line(divider2, cardTop - 15, divider2, cardBottom + 15);
 
-      drawMonogram(divider1 + 28, iconY, 15, 'E');
-      text(divider1 + 52, cardTop - 27, 'EMISSÃO', 7.2, 'F2', 'left', COLORS.gold);
-      text(divider1 + 52, cardTop - 47, dateBR(quote.createdAt), 9.2, 'F1', 'left', COLORS.ink);
+      text(clientX, cardTop - 22, 'CLIENTE', 7.5, 'F2', 'left', COLORS.gold);
+      text(clientX, cardTop - 43, client.name || quote.clientName || 'Cliente', 11.3, 'F2', 'left', COLORS.ink);
+      const clientContact = [client.phone, client.email].filter(Boolean).join('  |  ');
+      if (clientContact) text(clientX, cardTop - 61, clientContact, 7.8, 'F1', 'left', COLORS.muted);
+      if (client.document) text(clientX, cardTop - 75, client.document, 7.2, 'F1', 'left', COLORS.muted);
 
-      drawMonogram(divider2 + 28, iconY, 15, 'V');
-      text(divider2 + 52, cardTop - 27, 'VALIDADE', 7.2, 'F2', 'left', COLORS.gold);
-      text(divider2 + 52, cardTop - 47, dateBR(quote.validUntil), 9.2, 'F1', 'left', COLORS.ink);
+      const issueCenter = divider1 + (divider2 - divider1) / 2;
+      const validCenter = divider2 + (RIGHT - divider2) / 2;
+      text(issueCenter, cardTop - 28, 'EMISSÃO', 7.2, 'F2', 'center', COLORS.gold);
+      text(issueCenter, cardTop - 49, dateBR(quote.createdAt), 9.3, 'F1', 'center', COLORS.ink);
+      text(validCenter, cardTop - 28, 'VALIDADE', 7.2, 'F2', 'center', COLORS.gold);
+      text(validCenter, cardTop - 49, dateBR(quote.validUntil), 9.3, 'F1', 'center', COLORS.ink);
 
       y = cardBottom - 26;
     }
@@ -308,41 +300,35 @@
       tableHeader();
     }
 
-    function rowNeedsNewPage(height) {
-      return y - height < SAFE_BOTTOM + 110;
-    }
-
     firstPageHeader();
     tableHeader();
 
-    for (const item of quote.items || []) {
-      const itemLines = wrapText(item.name || 'Item', 44);
-      const descriptionLines = item.description ? wrapText(item.description, 50).slice(0, 3) : [];
+    for (let index = 0; index < (quote.items || []).length; index++) {
+      const item = quote.items[index];
+      const itemLines = wrapText(item.name || 'Item', 48);
+      const descriptionLines = item.description ? wrapText(item.description, 54).slice(0, 3) : [];
       const rowHeight = Math.max(40, 17 + (itemLines.length + descriptionLines.length) * 11);
-      if (rowNeedsNewPage(rowHeight)) newContinuationPage();
+      if (y - rowHeight < SAFE_BOTTOM + 110) newContinuationPage();
 
       const rowTop = y + 10;
-      if ((quote.items || []).indexOf(item) % 2 === 1) {
+      if (index % 2 === 1) {
         setFill([0.995, 0.992, 0.983]);
         rect(LEFT, rowTop, CONTENT_WIDTH, rowHeight, true);
       }
       setStroke(COLORS.goldLight);
       setLineWidth(0.45);
       line(LEFT, y - rowHeight + 8, RIGHT, y - rowHeight + 8);
-
-      setFill(COLORS.navy2);
       setStroke(COLORS.gold);
-      setLineWidth(0.8);
-      circle(LEFT + 20, y - 5, 12, true, true);
-      text(LEFT + 20, y - 9, '•', 11, 'F2', 'center', COLORS.gold);
+      setLineWidth(1.2);
+      line(LEFT + 8, y + 2, LEFT + 8, y - rowHeight + 15);
 
       let itemY = y;
       for (const itemLine of itemLines) {
-        text(LEFT + 42, itemY, itemLine, 9.3, itemY === y ? 'F2' : 'F1', 'left', COLORS.ink);
+        text(LEFT + 20, itemY, itemLine, 9.3, itemY === y ? 'F2' : 'F1', 'left', COLORS.ink);
         itemY -= 11;
       }
       for (const descriptionLine of descriptionLines) {
-        text(LEFT + 42, itemY, descriptionLine, 7.6, 'F1', 'left', COLORS.muted);
+        text(LEFT + 20, itemY, descriptionLine, 7.6, 'F1', 'left', COLORS.muted);
         itemY -= 10;
       }
 
@@ -457,9 +443,7 @@
     const xrefOffset = pdf.length;
     pdf += `xref\n0 ${maxId + 1}\n`;
     pdf += '0000000000 65535 f \n';
-    for (let id = 1; id <= maxId; id++) {
-      pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
-    }
+    for (let id = 1; id <= maxId; id++) pdf += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
     pdf += `trailer\n<< /Size ${maxId + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
     const bytes = new Uint8Array(pdf.length);
