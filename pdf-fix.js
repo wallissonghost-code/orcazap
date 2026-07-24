@@ -71,17 +71,22 @@
 
   window.generateQuotePDF = async function generateQuotePDFFixed(id) {
     const previewWindow = preparePreviewWindow();
-    let originalSave = null;
-    let jsPDF = null;
+    let OriginalJsPDF = null;
 
     try {
       toast('Gerando PDF...');
       await ensurePdfLibrary();
-      jsPDF = window.jspdf.jsPDF;
-      originalSave = jsPDF.API.save;
-      jsPDF.API.save = function savePdfCompat(filename) {
-        return deliverPdf(this, filename, previewWindow);
-      };
+      OriginalJsPDF = window.jspdf.jsPDF;
+
+      function CompatibleJsPDF(...args) {
+        const doc = new OriginalJsPDF(...args);
+        doc.save = filename => deliverPdf(doc, filename, previewWindow);
+        return doc;
+      }
+
+      Object.assign(CompatibleJsPDF, OriginalJsPDF);
+      CompatibleJsPDF.API = OriginalJsPDF.API;
+      window.jspdf.jsPDF = CompatibleJsPDF;
 
       await originalGenerateQuotePDF(id);
       toast(previewWindow ? 'PDF aberto em uma nova aba.' : 'PDF baixado com sucesso.');
@@ -90,7 +95,7 @@
       if (previewWindow && !previewWindow.closed) previewWindow.close();
       toast(`Não foi possível gerar o PDF: ${error?.message || 'erro inesperado'}`, 'error');
     } finally {
-      if (jsPDF && originalSave) jsPDF.API.save = originalSave;
+      if (OriginalJsPDF) window.jspdf.jsPDF = OriginalJsPDF;
     }
   };
 })();
