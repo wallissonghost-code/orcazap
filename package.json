@@ -1,9 +1,16 @@
 {
   "name": "orcazap",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Orçamentos, Pix, WhatsApp e pedidos em um só lugar.",
+  "description": "Orçamentos, chatbot, Pix, WhatsApp e pedidos em um só lugar.",
   "scripts": {
-    "start": "npx serve . -l 3000"
+    "start": "npx serve . -l 3000",
+    "check": "node --check app-whatsapp.js && node --check api/whatsapp-webhook.js && node --check api/whatsapp-status.js && node --check api/pix-qr.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
