@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="description" content="OrçaZap — orçamentos, pedidos, clientes e cobranças pelo WhatsApp." />
+  <title>OrçaZap</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div id="toast" class="toast" aria-live="polite"></div>
+
+  <div id="lockScreen" class="lock-screen hidden">
+    <div class="lock-card">
+      <div class="brand brand-large">
+        <span class="brand-mark">OZ</span>
+        <span>OrçaZap</span>
+      </div>
+      <h1>Acesso protegido</h1>
+      <p>Digite seu PIN para abrir o painel.</p>
+      <form id="unlockForm" class="stack">
+        <input id="unlockPin" class="input input-large" type="password" inputmode="numeric" maxlength="8" placeholder="Seu PIN" autocomplete="current-password" required />
+        <button class="btn btn-primary btn-large" type="submit">Entrar</button>
+      </form>
+      <small>Os dados ficam armazenados neste navegador.</small>
+    </div>
+  </div>
+
+  <div id="appShell" class="app-shell">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <button id="closeSidebar" class="icon-btn mobile-only" aria-label="Fechar menu">×</button>
+        <div class="brand">
+          <span class="brand-mark">OZ</span>
+          <span>OrçaZap</span>
+        </div>
+        <div id="companyMini" class="company-mini">Seu negócio</div>
+      </div>
+
+      <nav id="nav" class="nav" aria-label="Navegação principal">
+        <button class="nav-item active" data-view="dashboard"><span>⌂</span>Visão geral</button>
+        <button class="nav-item" data-view="quotes"><span>▤</span>Orçamentos</button>
+        <button class="nav-item" data-view="orders"><span>▣</span>Pedidos</button>
+        <button class="nav-item" data-view="clients"><span>♙</span>Clientes</button>
+        <button class="nav-item" data-view="products"><span>◇</span>Produtos e serviços</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span>Configurações</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="plan-card">
+          <strong>OrçaZap Local</strong>
+          <span>Sem mensalidade e pronto para vender.</span>
+        </div>
+      </div>
+    </aside>
+
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="openSidebar" class="icon-btn mobile-only" aria-label="Abrir menu">☰</button>
+          <div>
+            <h1 id="pageTitle">Visão geral</h1>
+            <p id="pageSubtitle">Acompanhe vendas, cobranças e pedidos.</p>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button id="quickClient" class="btn btn-ghost desktop-only">+ Cliente</button>
+          <button id="quickQuote" class="btn btn-primary">+ Novo orçamento</button>
+        </div>
+      </header>
+
+      <section id="content" class="content"></section>
+    </main>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="printRoot"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
