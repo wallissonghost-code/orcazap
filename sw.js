@@ -1,4 +1,4 @@
-const CACHE = 'orcazap-v4';
+const CACHE = 'orcazap-v6';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,12 +8,17 @@ const ASSETS = [
   '/app-events.js',
   '/app-quotes.js',
   '/app-pdf.js',
-  '/pdf-fix.js',
+  '/pdf-fix.js?v=6',
   '/icon.svg',
   '/manifest.webmanifest'
 ];
-self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS))));
-self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))));
+self.addEventListener('install', event => {
+  self.skipWaiting();
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+});
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(fetch(event.request).then(response => {
