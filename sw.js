@@ -1,4 +1,4 @@
-const CACHE = 'orcazap-v2';
+const CACHE = 'orcazap-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   '/app-events.js',
   '/app-quotes.js',
   '/app-pdf.js',
+  '/pdf-fix.js',
   '/icon.svg',
   '/manifest.webmanifest'
 ];
