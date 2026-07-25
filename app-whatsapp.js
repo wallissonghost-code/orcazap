@@ -6,16 +6,25 @@
 
   pageMeta.whatsapp = ['Atendimento WhatsApp', 'Configure o assistente, teste conversas e prepare a integração oficial.'];
 
+  function emptyFlow() {
+    return { mode: 'idle', stage: null, draft: {} };
+  }
+
   function ensureWhatsAppData() {
     if (!data.whatsapp || typeof data.whatsapp !== 'object') {
       data.whatsapp = {
         botName: 'Assistente OrçaZap',
         greeting: 'Olá! Sou o assistente virtual. Posso ajudar com orçamento, pagamento via Pix ou atendimento humano.',
         autoPix: true,
-        history: []
+        history: [],
+        leads: [],
+        flow: emptyFlow()
       };
     }
     if (!Array.isArray(data.whatsapp.history)) data.whatsapp.history = [];
+    if (!Array.isArray(data.whatsapp.leads)) data.whatsapp.leads = [];
+    if (!data.whatsapp.flow || typeof data.whatsapp.flow !== 'object') data.whatsapp.flow = emptyFlow();
+    if (!data.whatsapp.flow.draft || typeof data.whatsapp.flow.draft !== 'object') data.whatsapp.flow.draft = {};
     if (!data.whatsapp.history.length) {
       data.whatsapp.history.push({
         id: uid(),
@@ -26,21 +35,119 @@
     }
   }
 
+  function normalizeMessage(value) {
+    return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function resetFlow() {
+    ensureWhatsAppData();
+    data.whatsapp.flow = emptyFlow();
+  }
+
+  function startQuoteFlow() {
+    ensureWhatsAppData();
+    data.whatsapp.flow = { mode: 'quote', stage: 'name', draft: {} };
+    return 'Perfeito! Vamos montar sua solicitação passo a passo.\n\nQual é o seu nome ou o nome da empresa?';
+  }
+
+  function quoteSummary(draft) {
+    return `Confira os dados do seu pré-orçamento:\n\n• Nome: ${draft.name}\n• Serviço: ${draft.service}\n• Localização: ${draft.location}\n• Medidas ou quantidade: ${draft.quantity}\n• Prazo desejado: ${draft.deadline}\n\nDigite “confirmar” para enviar ou “corrigir” para preencher novamente.`;
+  }
+
+  function continueQuoteFlow(message) {
+    const flow = data.whatsapp.flow;
+    const clean = String(message || '').trim();
+    const text = normalizeMessage(clean);
+
+    if (/\b(cancelar|cancela|parar|sair)\b/.test(text)) {
+      resetFlow();
+      return 'Solicitação cancelada. Digite “orçamento”, “Pix” ou “atendente” quando precisar.';
+    }
+
+    if (flow.stage === 'name') {
+      if (clean.length < 2) return 'Não consegui identificar o nome. Pode digitar seu nome ou o nome da empresa?';
+      flow.draft.name = clean;
+      flow.stage = 'service';
+      const firstName = clean.split(/\s+/)[0];
+      return `Prazer, ${firstName}! Qual produto ou serviço você deseja solicitar?`;
+    }
+
+    if (flow.stage === 'service') {
+      if (clean.length < 3) return 'Pode descrever um pouco melhor o produto ou serviço desejado?';
+      flow.draft.service = clean;
+      flow.stage = 'location';
+      return 'Certo. Em qual cidade, bairro ou endereço o serviço será realizado ou entregue?';
+    }
+
+    if (flow.stage === 'location') {
+      if (clean.length < 2) return 'Informe pelo menos a cidade ou o bairro, por favor.';
+      flow.draft.location = clean;
+      flow.stage = 'quantity';
+      return 'Agora informe as medidas, a quantidade ou uma descrição do tamanho do serviço.';
+    }
+
+    if (flow.stage === 'quantity') {
+      if (clean.length < 1) return 'Informe as medidas ou a quantidade necessária, por favor.';
+      flow.draft.quantity = clean;
+      flow.stage = 'deadline';
+      return 'Qual é o prazo desejado? Por exemplo: “até sexta”, “7 dias” ou “sem urgência”.';
+    }
+
+    if (flow.stage === 'deadline') {
+      if (clean.length < 2) return 'Informe o prazo desejado ou escreva “sem urgência”.';
+      flow.draft.deadline = clean;
+      flow.stage = 'confirm';
+      return quoteSummary(flow.draft);
+    }
+
+    if (flow.stage === 'confirm') {
+      if (/\b(confirmar|confirmo|confirmado|sim|certo|ok|enviar|pode enviar)\b/.test(text)) {
+        const lead = {
+          id: uid(),
+          ...flow.draft,
+          status: 'new',
+          createdAt: nowIso()
+        };
+        data.whatsapp.leads.unshift(lead);
+        data.whatsapp.leads = data.whatsapp.leads.slice(0, 100);
+        activity(`Nova solicitação pelo WhatsApp: ${lead.name} — ${lead.service}`);
+        resetFlow();
+        return `Pronto, ${lead.name}! Sua solicitação foi registrada com sucesso.\n\nA equipe vai analisar os dados e preparar o orçamento. Quando ele estiver pronto, poderá ser enviado com PDF e opção de pagamento via Pix.`;
+      }
+      if (/\b(corrigir|editar|alterar|nao|não|recomecar|reiniciar)\b/.test(text)) {
+        data.whatsapp.flow = { mode: 'quote', stage: 'name', draft: {} };
+        return 'Sem problema. Vamos preencher novamente. Qual é o seu nome ou o nome da empresa?';
+      }
+      return 'Digite “confirmar” para enviar os dados ou “corrigir” para preencher novamente.';
+    }
+
+    resetFlow();
+    return startQuoteFlow();
+  }
+
   function botReply(message) {
-    const text = String(message || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    ensureWhatsAppData();
+    const text = normalizeMessage(message);
     const business = data.settings.businessName || 'nossa empresa';
 
-    if (/\b(oi|ola|bom dia|boa tarde|boa noite|menu|comecar)\b/.test(text)) {
+    if (/\b(menu|inicio|início|comecar|começar|reiniciar)\b/.test(text)) {
+      resetFlow();
       return `Olá! Você está falando com ${business}.\n\nPosso ajudar com:\n1. Solicitar orçamento\n2. Pagamento via Pix\n3. Falar com um atendente`;
     }
-    if (/\b(orcamento|orcamentos|preco|valor|quanto custa|cotacao)\b/.test(text)) {
-      return 'Perfeito. Para preparar seu pré-orçamento, envie em uma única mensagem:\n• seu nome\n• serviço desejado\n• cidade ou bairro\n• medidas ou quantidade\n• prazo desejado\n\nVocê também pode enviar fotos do serviço.';
+
+    if (data.whatsapp.flow.mode === 'quote') return continueQuoteFlow(message);
+
+    if (/\b(oi|ola|olá|bom dia|boa tarde|boa noite)\b/.test(text)) {
+      return `Olá! Você está falando com ${business}.\n\nPosso ajudar com:\n1. Solicitar orçamento\n2. Pagamento via Pix\n3. Falar com um atendente`;
     }
-    if (/\b(pix|pagar|pagamento|entrada|qr code|qrcode)\b/.test(text)) {
+    if (/^(1)$/.test(text) || /\b(orcamento|orçamentos|orcamentos|preco|preço|valor|quanto custa|cotacao|cotação)\b/.test(text)) {
+      return startQuoteFlow();
+    }
+    if (/^(2)$/.test(text) || /\b(pix|pagar|pagamento|entrada|qr code|qrcode)\b/.test(text)) {
       if (!data.settings.pixKey) return 'O Pix ainda não foi configurado. Vou chamar um atendente para concluir o pagamento.';
       return `Pagamento via Pix\nChave: ${data.settings.pixKey}\nFavorecido: ${data.settings.pixName || data.settings.businessName || 'Empresa'}\n\nO QR Code pode ser enviado automaticamente após a aprovação do orçamento.`;
     }
-    if (/\b(atendente|humano|pessoa|falar com alguem|suporte)\b/.test(text)) {
+    if (/^(3)$/.test(text) || /\b(atendente|humano|pessoa|falar com alguem|falar com alguém|suporte)\b/.test(text)) {
       return 'Certo. Registrei seu pedido de atendimento humano. Assim que possível, alguém da equipe continuará a conversa por aqui.';
     }
     if (/\b(aprovado|aprovar|aceito|fechado|pode fazer)\b/.test(text)) {
@@ -51,7 +158,7 @@
 
   function renderHistory() {
     ensureWhatsAppData();
-    return data.whatsapp.history.slice(-20).map(item => `
+    return data.whatsapp.history.slice(-30).map(item => `
       <div class="wa-message ${item.role === 'user' ? 'wa-user' : 'wa-bot'}">
         <div>${esc(item.text).replace(/\n/g, '<br>')}</div>
         <small>${dateTimeBR(item.createdAt)}</small>
@@ -136,7 +243,7 @@
   function addChatMessage(role, text) {
     ensureWhatsAppData();
     data.whatsapp.history.push({ id: uid(), role, text, createdAt: nowIso() });
-    data.whatsapp.history = data.whatsapp.history.slice(-40);
+    data.whatsapp.history = data.whatsapp.history.slice(-60);
     saveData();
     const chat = $('#waChat');
     if (chat) {
@@ -151,7 +258,7 @@
     addChatMessage('user', clean);
     const chat = $('#waChat');
     if (chat) chat.insertAdjacentHTML('beforeend', '<div class="wa-typing"><span></span><span></span><span></span></div>');
-    setTimeout(() => addChatMessage('bot', botReply(clean)), 450);
+    setTimeout(() => addChatMessage('bot', botReply(clean)), 350);
   }
 
   async function loadWhatsAppStatus() {
@@ -193,6 +300,8 @@
     const clear = $('#waClearChat');
     if (clear) clear.onclick = () => {
       data.whatsapp.history = [];
+      data.whatsapp.leads = [];
+      resetFlow();
       ensureWhatsAppData();
       saveData();
       render();
