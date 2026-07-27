@@ -1,7 +1,7 @@
 'use strict';
 
 (function forceOrcaZapUpdate() {
-  const BUILD = '17';
+  const BUILD = '18';
   const BUILD_KEY = 'orcazap:app-build';
   const RELOAD_KEY = 'orcazap:build-reloaded';
 
