@@ -1,7 +1,14 @@
 'use strict';
 
 const crypto = require('crypto');
-const { whatsappConfig, sendText, sendImage } = require('../lib/whatsapp');
+const { whatsappConfig, sendText: sendLegacyText, sendImage: sendLegacyImage } = require('../lib/whatsapp');
+const {
+  request: supabaseRequest,
+  getConnectionByPhoneNumber,
+  getBusinessSettings,
+  updateConnection
+} = require('../lib/supabase-server');
+const { sendText: sendTenantText, sendImage: sendTenantImage } = require('../lib/tenant-whatsapp');
 
 function readRawBody(req) {
   return new Promise((resolve, reject) => {
@@ -43,33 +50,148 @@ function replyFor(text, profileName, businessName) {
   return 'Posso iniciar um orçamento, enviar os dados do Pix ou encaminhar para um atendente. Digite “orçamento”, “Pix” ou “atendente”.';
 }
 
-async function handleIncoming(body, req) {
-  const config = whatsappConfig();
-  const value = body?.entry?.[0]?.changes?.[0]?.value;
+async function resolveRuntime(value) {
+  const phoneNumberId = String(value?.metadata?.phone_number_id || '');
+  if (phoneNumberId) {
+    const connection = await getConnectionByPhoneNumber(phoneNumberId).catch(() => null);
+    if (connection) {
+      const settings = await getBusinessSettings(connection.tenant_id).catch(() => null);
+      return {
+        mode: 'tenant',
+        connection,
+        settings: settings || {},
+        businessName: settings?.business_name || connection.business_account_name || 'OrçaZap',
+        pixKey: settings?.pix_key || '',
+        pixName: settings?.pix_name || settings?.business_name || '',
+        pixCity: settings?.pix_city || settings?.city || 'BRASIL'
+      };
+    }
+  }
+
+  const legacy = whatsappConfig();
+  if (legacy.accessToken && legacy.phoneNumberId) {
+    return {
+      mode: 'legacy',
+      legacy,
+      businessName: process.env.ORCAZAP_BUSINESS_NAME || 'OrçaZap',
+      pixKey: legacy.pixKey,
+      pixName: legacy.pixName,
+      pixCity: legacy.pixCity
+    };
+  }
+
+  return null;
+}
+
+async function sendText(runtime, to, text) {
+  return runtime.mode === 'tenant'
+    ? sendTenantText(runtime.connection, to, text)
+    : sendLegacyText(to, text);
+}
+
+async function sendImage(runtime, to, link, caption) {
+  return runtime.mode === 'tenant'
+    ? sendTenantImage(runtime.connection, to, link, caption)
+    : sendLegacyImage(to, link, caption);
+}
+
+async function storeInbound(runtime, message, profileName, text) {
+  if (runtime.mode !== 'tenant') return;
+  try {
+    const tenantId = runtime.connection.tenant_id;
+    const contactId = String(message.from || '');
+    const rows = await supabaseRequest(`/rest/v1/whatsapp_conversations?select=id&tenant_id=eq.${encodeURIComponent(tenantId)}&wa_contact_id=eq.${encodeURIComponent(contactId)}&limit=1`);
+    let conversationId = Array.isArray(rows) ? rows[0]?.id : null;
+    if (!conversationId) {
+      const created = await supabaseRequest('/rest/v1/whatsapp_conversations', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify([{
+          tenant_id: tenantId,
+          wa_contact_id: contactId,
+          contact_phone: contactId,
+          contact_name: profileName || null,
+          status: 'bot',
+          last_message_at: new Date().toISOString()
+        }])
+      });
+      conversationId = Array.isArray(created) ? created[0]?.id : null;
+    } else {
+      await supabaseRequest(`/rest/v1/whatsapp_conversations?id=eq.${encodeURIComponent(conversationId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ contact_name: profileName || null, last_message_at: new Date().toISOString() })
+      });
+    }
+    if (conversationId) {
+      await supabaseRequest('/rest/v1/whatsapp_messages', {
+        method: 'POST',
+        body: JSON.stringify([{
+          tenant_id: tenantId,
+          conversation_id: conversationId,
+          wa_message_id: message.id || null,
+          direction: 'inbound',
+          message_type: message.type || 'text',
+          body: text || null,
+          raw_payload: message
+        }])
+      });
+    }
+  } catch (error) {
+    console.warn('Histórico WhatsApp:', error.message);
+  }
+}
+
+async function handleIncomingValue(value, req) {
   const message = value?.messages?.[0];
   if (!message) return;
-  const from = message.from;
-  const profileName = value?.contacts?.[0]?.profile?.name || '';
-  const text = message?.text?.body || message?.button?.text || message?.interactive?.button_reply?.title || '';
-  const businessName = process.env.ORCAZAP_BUSINESS_NAME || 'OrçaZap';
-  const normalized = normalize(text);
-
-  if (/\b(2|pix|pagar|pagamento|entrada|qr code|qrcode)\b/.test(normalized)) {
-    if (!config.pixKey) {
-      await sendText(from, 'A chave Pix ainda não foi configurada. Vou encaminhar você para um atendente.');
-      return;
-    }
-    const pixText = `Pagamento via Pix\nChave: ${config.pixKey}\nFavorecido: ${config.pixName || businessName}`;
-    await sendText(from, pixText);
-    const origin = config.publicAppUrl || `https://${req.headers.host}`;
-    if (origin) {
-      const query = new URLSearchParams({ key: config.pixKey, name: config.pixName || businessName, city: config.pixCity || 'BRASIL' });
-      await sendImage(from, `${origin}/api/pix-qr?${query.toString()}`, 'Escaneie o QR Code para pagar via Pix.');
-    }
+  const runtime = await resolveRuntime(value);
+  if (!runtime) {
+    console.warn('Mensagem recebida para número sem loja conectada:', value?.metadata?.phone_number_id || 'desconhecido');
     return;
   }
 
-  await sendText(from, replyFor(text, profileName, businessName));
+  const from = message.from;
+  const profileName = value?.contacts?.[0]?.profile?.name || '';
+  const text = message?.text?.body || message?.button?.text || message?.interactive?.button_reply?.title || '';
+  const normalized = normalize(text);
+  await storeInbound(runtime, message, profileName, text);
+
+  try {
+    if (/\b(2|pix|pagar|pagamento|entrada|qr code|qrcode)\b/.test(normalized)) {
+      if (!runtime.pixKey) {
+        await sendText(runtime, from, 'A chave Pix ainda não foi configurada. Vou encaminhar você para um atendente.');
+        return;
+      }
+      const pixText = `Pagamento via Pix\nChave: ${runtime.pixKey}\nFavorecido: ${runtime.pixName || runtime.businessName}`;
+      await sendText(runtime, from, pixText);
+      const legacyConfig = whatsappConfig();
+      const origin = legacyConfig.publicAppUrl || `https://${req.headers.host}`;
+      if (origin) {
+        const query = new URLSearchParams({ key: runtime.pixKey, name: runtime.pixName || runtime.businessName, city: runtime.pixCity || 'BRASIL' });
+        await sendImage(runtime, from, `${origin}/api/pix-qr?${query.toString()}`, 'Escaneie o QR Code para pagar via Pix.');
+      }
+      return;
+    }
+
+    await sendText(runtime, from, replyFor(text, profileName, runtime.businessName));
+  } catch (error) {
+    if (runtime.mode === 'tenant') {
+      await updateConnection(runtime.connection.tenant_id, {
+        status: 'error',
+        last_error: String(error.message || 'Falha ao enviar mensagem').slice(0, 500),
+        updated_at: new Date().toISOString()
+      }).catch(() => null);
+    }
+    throw error;
+  }
+}
+
+async function processWebhook(body, req) {
+  for (const entry of body?.entry || []) {
+    for (const change of entry?.changes || []) {
+      await handleIncomingValue(change?.value, req);
+    }
+  }
 }
 
 async function handler(req, res) {
@@ -101,7 +223,7 @@ async function handler(req, res) {
     }
     const body = JSON.parse(rawBody.toString('utf8') || '{}');
     res.status(200).json({ ok: true });
-    await handleIncoming(body, req);
+    await processWebhook(body, req);
   } catch (error) {
     console.error('Webhook WhatsApp:', error);
     if (!res.headersSent) res.status(500).json({ ok: false, error: 'Falha ao processar mensagem.' });
