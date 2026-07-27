@@ -1,0 +1,33 @@
+.cloud-account-btn { max-width: 220px; min-width: 92px; }
+.cloud-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: #94a3b8; }
+.cloud-dot.online { background: #18b56b; box-shadow: 0 0 0 4px rgba(24,181,107,.12); }
+.cloud-dot.error { background: #dc2626; box-shadow: 0 0 0 4px rgba(220,38,38,.1); }
+.cloud-account-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-auth, .cloud-form { display: grid; gap: 15px; }
+.cloud-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 5px; border-radius: 13px; background: #f1f5f9; }
+.cloud-tabs button { border: 0; border-radius: 9px; padding: 10px; background: transparent; color: var(--muted); font-weight: 900; }
+.cloud-tabs button.active { background: #fff; color: var(--text); box-shadow: 0 4px 14px rgba(15,23,42,.08); }
+.cloud-form > .btn { width: 100%; margin-top: 2px; }
+.cloud-form > small, .cloud-help { color: var(--muted); font-size: 10px; line-height: 1.55; }
+.cloud-account-card { display: grid; gap: 18px; }
+.cloud-account-hero { display: flex; align-items: center; gap: 13px; padding: 16px; border-radius: 15px; background: linear-gradient(135deg,#071326,#0d2744); color: #fff; }
+.cloud-avatar { width: 45px; height: 45px; border-radius: 14px; display: grid; place-items: center; background: #d8ae62; color: #071326; font-weight: 950; }
+.cloud-account-hero strong, .cloud-account-hero span { display: block; }
+.cloud-account-hero div > span { margin-top: 4px; color: #cbd8e8; font-size: 11px; }
+.cloud-account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cloud-account-grid > div { padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: #fbfcfe; }
+.cloud-account-grid .full { grid-column: 1 / -1; }
+.cloud-account-grid small, .cloud-account-grid strong { display: block; }
+.cloud-account-grid small { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }
+.cloud-account-grid strong { margin-top: 5px; font-size: 12px; text-transform: capitalize; }
+.cloud-account-actions { display: flex; gap: 9px; flex-wrap: wrap; }
+.cloud-account-actions .btn { flex: 1; }
+.cloud-help { margin: 0; }
+@media (max-width: 780px) {
+  .cloud-account-btn { min-width: 42px; width: 42px; padding-inline: 0; }
+  .cloud-account-label { display: none; }
+  .topbar-actions { gap: 7px; }
+}
+@media (max-width: 430px) {
+  .cloud-account-btn::after { content: none !important; }
+}
