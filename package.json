@@ -1,11 +1,11 @@
 {
   "name": "orcazap",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Orçamentos, chatbot, Pix, WhatsApp e pedidos em um só lugar.",
   "scripts": {
     "start": "npx serve . -l 3000",
-    "check": "node --check app-whatsapp.js && node --check app-whatsapp-connect.js && node --check api/whatsapp-webhook.js && node --check api/whatsapp-status.js && node --check api/whatsapp-embedded-config.js && node --check api/whatsapp-connect.js && node --check api/whatsapp-disconnect.js && node --check api/pix-qr.js && node --check lib/meta-embedded.js && node --check lib/supabase-server.js && node --check lib/secure-token.js && node --check lib/tenant-whatsapp.js"
+    "check": "node --check app-whatsapp.js && node --check app-whatsapp-connect-v2.js && node --check api/whatsapp-webhook.js && node --check api/whatsapp-status.js && node --check api/whatsapp-embedded-config.js && node --check api/whatsapp-connect.js && node --check api/whatsapp-disconnect.js && node --check api/pix-qr.js && node --check lib/meta-embedded.js && node --check lib/supabase-server.js && node --check lib/secure-token.js && node --check lib/tenant-whatsapp.js"
   },
   "dependencies": {
     "qrcode": "^1.5.4"
